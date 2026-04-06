@@ -133,13 +133,9 @@ RUN set -eux; \
     rm -rf /var/lib/apt/lists/*; \
     node --version; npm --version
 
-# 6b. Claude Code — native installer (standalone, no Node.js dependency)
-#     Installed to /usr/local via npm since the native installer places files
-#     in ~/.local which is root-only during build. npm global install puts
-#     the binary in /usr/local/bin where all users can access it.
-RUN set -eux; \
-    npm install -g @anthropic-ai/claude-code; \
-    claude --version
+# 6b. Claude Code — installed per-user after user setup (see section 8)
+#     The native installer is Anthropic's recommended path over npm and
+#     avoids the deprecation warning shown when launching via npm.
 
 # 6c. Codex CLI (OpenAI) — installed via npm (Rust binary, Node wrapper)
 RUN set -eux; \
@@ -174,12 +170,21 @@ RUN mkdir -p /workspaces \
     && chown devuser:devuser /workspaces
 
 # ---------------------------------------------------------------------------
-# 8. Final configuration
+# 8. Claude Code — native installer, run as devuser
+#     Places binary at /home/devuser/.local/bin/claude. Added to PATH below.
 # ---------------------------------------------------------------------------
 USER devuser
+RUN set -eux; \
+    curl -fsSL https://claude.ai/install.sh | bash; \
+    /home/devuser/.local/bin/claude --version
+
+# ---------------------------------------------------------------------------
+# 9. Final configuration
+# ---------------------------------------------------------------------------
 WORKDIR /workspaces
 
 ENV SHELL=/bin/bash
+ENV PATH=/home/devuser/.local/bin:$PATH
 
 # OCI image labels
 LABEL org.opencontainers.image.source="https://github.com/dataviking-tech/agent-dev-base"
