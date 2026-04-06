@@ -27,7 +27,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gnupg \
     lsof \
     procps \
-    flock \
+    util-linux \
     unzip \
     less \
     && rm -rf /var/lib/apt/lists/*
