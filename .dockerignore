@@ -1,5 +1,9 @@
 .git
 .github
-README.md
-LICENSE
 *.md
+LICENSE
+.dockerignore
+.gitignore
+.editorconfig
+.vscode
+.devcontainer

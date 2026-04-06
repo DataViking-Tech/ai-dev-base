@@ -1,29 +1,28 @@
-name: Build and Push Image
+name: Build and Push
 
 on:
   push:
     branches: [main]
-  release:
-    types: [published]
+    tags: ["v*"]
   pull_request:
     branches: [main]
+
+permissions:
+  contents: read
+  packages: write
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  build:
+  build-push:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up QEMU
+      - name: Set up QEMU (multi-arch)
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
@@ -37,16 +36,28 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata
+      # Generate tags:
+      #   push to main  -> latest, YYYY-MM-DD, sha-<short>
+      #   release tag   -> semver (1.0.0, 1.0, 1), sha-<short>
+      - name: Docker metadata (tags + labels)
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=edge,branch=main
+            # On push to main: latest + date-based
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value={{date 'YYYY-MM-DD'}},enable={{is_default_branch}}
+            # On semver tag: major.minor.patch, major.minor, major
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
+            # Always: sha-based for traceability
+            type=sha,prefix=sha-
+          labels: |
+            org.opencontainers.image.title=ai-dev-base
+            org.opencontainers.image.description=Lightweight base image for AI agent development with Gas City orchestration
+            org.opencontainers.image.licenses=MIT
 
       - name: Build and push
         uses: docker/build-push-action@v6

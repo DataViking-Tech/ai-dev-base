@@ -1,40 +1,136 @@
 name: Test Image
 
 on:
-  pull_request:
-    branches: [main]
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
 
 jobs:
   test:
+    strategy:
+      matrix:
+        platform: [linux/amd64, linux/arm64]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build image
-        run: docker build -t ai-dev-base:test .
+      - name: Set up QEMU (multi-arch)
+        uses: docker/setup-qemu-action@v3
 
-      - name: Verify orchestration tools
-        run: |
-          docker run --rm ai-dev-base:test gc version
-          docker run --rm ai-dev-base:test bd version
-          docker run --rm ai-dev-base:test dolt version
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Verify system tools
-        run: |
-          docker run --rm ai-dev-base:test git --version
-          docker run --rm ai-dev-base:test tmux -V
-          docker run --rm ai-dev-base:test jq --version
-          docker run --rm ai-dev-base:test gh --version
+      - name: Build image for testing
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          load: true
+          tags: ai-dev-base:test
 
-      - name: Verify user setup
-        run: |
-          docker run --rm ai-dev-base:test id
-          docker run --rm ai-dev-base:test bash -c 'test "$(id -u)" = "1000"'
-          docker run --rm ai-dev-base:test bash -c 'sudo echo "sudo works"'
+      # -------------------------------------------------------------------
+      # E.1 Binary smoke tests
+      # -------------------------------------------------------------------
+      - name: "Test: gc is executable"
+        run: docker run --rm ai-dev-base:test gc version
 
-      - name: Verify no root processes needed
+      - name: "Test: bd is executable"
+        run: docker run --rm ai-dev-base:test bd version
+
+      - name: "Test: dolt is executable"
+        run: docker run --rm ai-dev-base:test dolt version
+
+      - name: "Test: git is available"
+        run: docker run --rm ai-dev-base:test git --version
+
+      - name: "Test: tmux is available"
+        run: docker run --rm ai-dev-base:test tmux -V
+
+      - name: "Test: jq is available"
+        run: docker run --rm ai-dev-base:test jq --version
+
+      - name: "Test: flock is available"
+        run: docker run --rm ai-dev-base:test flock --version
+
+      - name: "Test: pgrep is available"
+        run: docker run --rm ai-dev-base:test pgrep -V
+
+      - name: "Test: lsof is available"
+        run: docker run --rm ai-dev-base:test which lsof
+
+      - name: "Test: claude is available"
+        run: docker run --rm ai-dev-base:test claude --version
+
+      - name: "Test: codex is available"
+        run: docker run --rm ai-dev-base:test codex --version
+
+      - name: "Test: amp is available"
+        run: docker run --rm ai-dev-base:test amp --version
+
+      # -------------------------------------------------------------------
+      # E.2 User and environment tests
+      # -------------------------------------------------------------------
+      - name: "Test: running as devuser"
         run: |
-          docker run --rm ai-dev-base:test bash -c 'whoami && test "$(whoami)" = "vscode"'
+          result=$(docker run --rm ai-dev-base:test whoami)
+          echo "whoami: $result"
+          [ "$result" = "devuser" ]
+
+      - name: "Test: UID is 1000"
+        run: |
+          result=$(docker run --rm ai-dev-base:test id -u)
+          echo "uid: $result"
+          [ "$result" = "1000" ]
+
+      - name: "Test: locale is UTF-8"
+        run: |
+          docker run --rm ai-dev-base:test locale | grep -q "en_US.UTF-8"
+
+      - name: "Test: sudo works"
+        run: |
+          result=$(docker run --rm ai-dev-base:test sudo id)
+          echo "sudo id: $result"
+          echo "$result" | grep -q "uid=0"
+
+      - name: "Test: /workspaces exists"
+        run: docker run --rm ai-dev-base:test test -d /workspaces
+
+      - name: "Test: /workspaces owned by devuser"
+        run: |
+          result=$(docker run --rm ai-dev-base:test stat -c '%U' /workspaces)
+          echo "owner: $result"
+          [ "$result" = "devuser" ]
+
+      # -------------------------------------------------------------------
+      # E.3 Architecture test
+      # -------------------------------------------------------------------
+      - name: "Test: correct architecture"
+        run: |
+          expected_arch=""
+          if [ "${{ matrix.platform }}" = "linux/amd64" ]; then
+            expected_arch="x86_64"
+          elif [ "${{ matrix.platform }}" = "linux/arm64" ]; then
+            expected_arch="aarch64"
+          fi
+          result=$(docker run --rm ai-dev-base:test uname -m)
+          echo "uname -m: $result (expected: $expected_arch)"
+          [ "$result" = "$expected_arch" ]
+
+      # -------------------------------------------------------------------
+      # E.4 Image size gate (under 500 MB uncompressed)
+      # -------------------------------------------------------------------
+      - name: "Test: image size under 500 MB"
+        run: |
+          size_bytes=$(docker image inspect ai-dev-base:test --format '{{.Size}}')
+          size_mb=$((size_bytes / 1024 / 1024))
+          echo "Image size: ${size_mb} MB (${size_bytes} bytes)"
+          if [ "$size_mb" -gt 500 ]; then
+            echo "FAIL: Image size ${size_mb} MB exceeds 500 MB limit"
+            exit 1
+          fi
+          echo "PASS: Image size ${size_mb} MB is within 500 MB limit"
