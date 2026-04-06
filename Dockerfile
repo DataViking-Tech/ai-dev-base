@@ -56,19 +56,16 @@ ENV LC_ALL=en_US.UTF-8
 # 3. Dolt — SQL database backing Beads
 #
 # Release archive: dolt-linux-{amd64,arm64}.tar.gz
-# Checksums:       https://github.com/dolthub/dolt/releases/download/v<V>/checksums.txt
+# Note: Dolt does not publish checksums.txt — verified by version check only
 # ---------------------------------------------------------------------------
 RUN set -eux; \
     ARCH="${TARGETARCH:-amd64}"; \
     TARBALL="dolt-linux-${ARCH}.tar.gz"; \
     curl -fsSL "https://github.com/dolthub/dolt/releases/download/v${DOLT_VERSION}/${TARBALL}" \
         -o "/tmp/${TARBALL}"; \
-    curl -fsSL "https://github.com/dolthub/dolt/releases/download/v${DOLT_VERSION}/checksums.txt" \
-        -o /tmp/checksums.txt; \
-    cd /tmp && grep "${TARBALL}" checksums.txt | sha256sum -c -; \
     tar -xzf "/tmp/${TARBALL}" -C /tmp; \
     install "/tmp/dolt-linux-${ARCH}/bin/dolt" /usr/local/bin/dolt; \
-    rm -rf /tmp/dolt* /tmp/checksums.txt; \
+    rm -rf /tmp/dolt*; \
     dolt version
 
 # ---------------------------------------------------------------------------
@@ -82,7 +79,7 @@ RUN set -eux; \
     TARBALL="gascity_${GC_VERSION}_linux_${ARCH}.tar.gz"; \
     curl -fsSL "https://github.com/gastownhall/gascity/releases/download/v${GC_VERSION}/${TARBALL}" \
         -o "/tmp/${TARBALL}"; \
-    curl -fsSL "https://github.com/gastownhall/gascity/releases/download/v${GC_VERSION}/checksums.txt" \
+    curl -fsSL "https://github.com/gastownhall/gascity/releases/download/v${GC_VERSION}/gascity_${GC_VERSION}_checksums.txt" \
         -o /tmp/checksums.txt; \
     cd /tmp && grep "${TARBALL}" checksums.txt | sha256sum -c -; \
     tar -xzf "/tmp/${TARBALL}" -C /tmp; \
