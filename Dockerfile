@@ -12,7 +12,7 @@
 # Multi-arch:
 #   docker buildx build --platform linux/amd64,linux/arm64 -t agent-dev-base .
 
-FROM ubuntu:noble
+FROM ubuntu:resolute
 
 # ---------------------------------------------------------------------------
 # Build arguments — version pins for orchestration tools
